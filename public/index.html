@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8" />
+	<meta http-equiv="X-UA-Compatible" content="IE=edge" />	
+	<title>Parse.com ERD Tool</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="//code.jquery.com/jquery-1.11.2.min.js"></script>
+    <script src="//gojs.net/latest/release/go.js"></script> 
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-65012374-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+	<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css">
+
+	<!-- Optional theme -->
+	<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap-theme.min.css">
+
+	<!-- Latest compiled and minified JavaScript -->
+	<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js"></script>
+	<script src="//cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore-min.js"></script>
+	<script src="//www.parsecdn.com/js/parse-1.4.2.min.js"></script>
+	<script>
+	Parse._request = function(options) {
+	    var route = options.route;
+	    var className = options.className;
+	    var objectId = options.objectId;
+	    var method = options.method;
+	    var useMasterKey = options.useMasterKey;
+	    var sessionToken = options.sessionToken;
+	    var dataObject = options.data;
+
+	    if (!Parse.applicationId) {
+	      throw "You must specify your applicationId using Parse.initialize.";
+	    }
+
+	    if (!Parse.javaScriptKey && !Parse.masterKey) {
+	      throw "You must specify a key using Parse.initialize.";
+	    }
+
+	    
+	    if (route !== "batch" &&
+	        route !== "classes" &&
+	        route !== "events" &&
+	        route !== "files" &&
+	        route !== "functions" &&
+	        route !== "login" &&
+	        route !== "logout" &&
+	        route !== "push" &&
+	        route !== "requestPasswordReset" &&
+	        route !== "rest_verify_analytics" &&
+	        route !== "users" &&
+	        route !== "jobs" &&
+	        route !== "config" &&
+	        route !== "sessions" &&
+	        route !== "schemas" &&
+	        route !== "upgradeToRevocableSession") {
+	      throw "Bad route: '" + route + "'.";
+	    }
+
+	    var url = Parse.serverURL;
+	    if (url.charAt(url.length - 1) !== "/") {
+	      url += "/";
+	    }
+	    url += "1/" + route;
+	    if (className) {
+	      url += "/" + className;
+	    }
+	    if (objectId) {
+	      url += "/" + objectId;
+	    }
+
+	    dataObject = Parse._.clone(dataObject || {});
+	    if (method !== "POST") {
+	      dataObject._method = method;
+	      method = "POST";
+	    }
+
+	    if (Parse._.isUndefined(useMasterKey)) {
+	      useMasterKey = Parse._useMasterKey;
+	    }
+
+	    dataObject._ApplicationId = Parse.applicationId;
+	    if (!useMasterKey) {
+	      dataObject._JavaScriptKey = Parse.javaScriptKey;
+	    } else {
+	      dataObject._MasterKey = Parse.masterKey;
+	    }
+
+	    dataObject._ClientVersion = Parse.VERSION;
+
+	    return Parse._getInstallationId().then(function(iid) {
+	      dataObject._InstallationId = iid;
+
+	      if (sessionToken) {
+	        return Parse.Promise.as({ _sessionToken: sessionToken });
+	      }
+
+	      return Parse.User._currentAsync();
+	    }).then(function(currentUser) {
+	      if (currentUser && currentUser._sessionToken) {
+	        dataObject._SessionToken = currentUser._sessionToken;
+	      }
+
+	      if (Parse.User._isRevocableSessionEnabled) {
+	        dataObject._RevocableSession = '1';
+	      }
+
+	      var data = JSON.stringify(dataObject);
+
+	      return Parse._ajax(method, url, data);
+	    }).then(null, function(response) {
+	      // Transform the error into an instance of Parse.Error by trying to parse
+	      // the error string as JSON.
+	      var error;
+	      if (response && response.responseText) {
+	        try {
+	          var errorJSON = JSON.parse(response.responseText);
+	          error = new Parse.Error(errorJSON.code, errorJSON.error);
+	        } catch (e) {
+	          // If we fail to parse the error text, that's okay.
+	          error = new Parse.Error(
+	              Parse.Error.INVALID_JSON,
+	              "Received an error with invalid JSON from Parse: " +
+	                  response.responseText);
+	        }
+	      } else {
+	        error = new Parse.Error(
+	            Parse.Error.CONNECTION_FAILED,
+	            "XMLHttpRequest failed: " + JSON.stringify(response));
+	      }
+	      // By explicitly returning a rejected Promise, this will work with
+	      // either jQuery or Promises/A semantics.
+	      return Parse.Promise.error(error);
+	    });
+	  };
+
+	  Parse.initialize = function(applicationId, javaScriptKey, masterKey) {
+	    if (masterKey) {
+	    }
+	    Parse._initialize(applicationId, javaScriptKey, masterKey);
+	};
+
+  /**
+   * Call this method first to set up master authentication tokens for Parse.
+   * This method is for Parse's own private use.
+   * @param {String} applicationId Your Parse Application ID.
+   * @param {String} javaScriptKey Your Parse JavaScript Key.
+   * @param {String} masterKey Your Parse Master Key.
+   */
+	Parse._initialize = function(applicationId, javaScriptKey, masterKey) {
+		Parse.applicationId = applicationId;
+		Parse.javaScriptKey = javaScriptKey;
+		Parse.masterKey = masterKey;
+		Parse._useMasterKey = true;
+	};
+
+	Parse._ajax = function(method, url, data, success, error) {
+		var options = {
+		  success: success,
+		  error: error
+		};
+
+		if (Parse._useXDomainRequest()) {
+		  return Parse._ajaxIE8(method, url, data)._thenRunCallbacks(options);
+		}
+
+		var promise = new Parse.Promise();
+		var attempts = 0;
+
+		var dispatch = function() {
+		  var handled = false;
+		  var xhr = new Parse.XMLHttpRequest();
+
+		  xhr.onreadystatechange = function() {
+		    if (xhr.readyState === 4) {
+		      if (handled) {
+		        return;
+		      }
+		      handled = true;
+
+		      if (xhr.status >= 200 && xhr.status < 300) {
+		        var response;
+		        try {
+		          response = JSON.parse(xhr.responseText);
+		        } catch (e) {
+		          promise.reject(e);
+		        }
+		        if (response) {
+		          promise.resolve(response, xhr.status, xhr);
+		        }
+		      } else if (xhr.status >= 500) { // Retry on 5XX
+		        if (++attempts < 5) {
+		          // Exponentially-growing delay
+		          var delay = Math.round(
+		            Math.random() * 125 * Math.pow(2, attempts)
+		          );
+		          setTimeout(dispatch, delay);
+		        } else {
+		          // After 5 retries, fail
+
+		          promise.reject(xhr);
+		        }
+		      } else {
+		      	alert("Failed to login.");
+		        promise.reject(xhr);
+		      }
+		    }
+		  };
+
+		  xhr.open(method, url, true);
+		  xhr.setRequestHeader('Content-Type', 'text/plain');  // avoid pre-flight.
+		    // Add a special user agent just for request from node.js.
+		    xhr.setRequestHeader("User-Agent",
+		                         "Parse/" + Parse.VERSION +
+		                         " (NodeJS " +"v0.12.4"+ ")");
+		  console.log("xhrdata: " + data);
+		  xhr.send(data);
+		};
+
+		dispatch();
+		return promise._thenRunCallbacks(options); 
+	};
+	var ParseSchema = function ParseSchema(potentialSchema){
+		  	$("#myDiagram").remove();
+		  	$("hiddendownload").remove();
+		    $("#sample").append('<div id="myDiagram" class="diagram" style="background-color: white; border: solid 1px black; width: 100%; height: 700px"></div><a id="hiddendownload" href="" type="hidden" class="hidden"></a>');
+		    if (window.goSamples) goSamples();  // init for these samples -- you don't need to call this
+		    var gogo = go.GraphObject.make;  // for conciseness in defining templates
+		    myDiagram =
+		      gogo(go.Diagram, "myDiagram",  // must name or refer to the DIV HTML element
+		        {
+		          initialContentAlignment: go.Spot.Center,
+		          allowDelete: false,
+		          allowCopy: false,
+		          layout: gogo(go.ForceDirectedLayout),
+		          initialAutoScale: go.Diagram.Uniform,
+		          "undoManager.isEnabled": true
+		        });
+		    // define several shared Brushes
+		    var bluegrad = gogo(go.Brush, go.Brush.Linear, { 0: "rgb(150, 150, 250)", 0.5: "rgb(86, 86, 186)", 1: "rgb(86, 86, 186)" });
+		    var greengrad = gogo(go.Brush, go.Brush.Linear, { 0: "rgb(158, 209, 159)", 1: "rgb(67, 101, 56)" });
+		    var redgrad = gogo(go.Brush, go.Brush.Linear, { 0: "rgb(206, 106, 100)", 1: "rgb(180, 56, 50)" });
+		    var yellowgrad = gogo(go.Brush, go.Brush.Linear, { 0: "rgb(254, 221, 50)", 1: "rgb(254, 182, 50)" });
+		    var lightgrad = gogo(go.Brush, go.Brush.Linear, { 1: "#E6E6FA", 0: "#FFFAF0" });
+
+		    // the template for each attribute in a node's array of item data
+		    var itemTempl =
+		      gogo(go.Panel, "Horizontal",
+		        gogo(go.Shape,
+		          { desiredSize: new go.Size(10, 10) },
+		          new go.Binding("figure", "figure"),
+		          new go.Binding("fill", "color")),
+		        gogo(go.TextBlock,
+		          { stroke: "#333333",
+		            font: "bold 14px sans-serif" },
+		          new go.Binding("text", "name"))
+		      );
+
+		    // define the Node template, representing an entity
+		    myDiagram.nodeTemplate =
+		      gogo(go.Node, "Auto",  // the whole node panel
+		        { selectionAdorned: true,
+		          resizable: true,
+		          layoutConditions: go.Part.LayoutStandard & ~go.Part.LayoutNodeSized,
+		          fromSpot: go.Spot.AllSides,
+		          toSpot: go.Spot.AllSides,
+		          isShadowed: true,
+		          shadowColor: "#C5C1AA" },
+		        new go.Binding("location", "location").makeTwoWay(),
+		        // define the node's outer shape, which will surround the Table
+		        gogo(go.Shape, "Rectangle",
+		          { fill: lightgrad, stroke: "#756875", strokeWidth: 3 }),
+		        gogo(go.Panel, "Table",
+		          { margin: 8, stretch: go.GraphObject.Fill },
+		          gogo(go.RowColumnDefinition, { row: 0, sizing: go.RowColumnDefinition.None }),
+		          // the table header
+		          gogo(go.TextBlock,
+		            {
+		              row: 0, alignment: go.Spot.Center,
+		              margin: new go.Margin(0, 14, 0, 2),  // leave room for Button
+		              font: "bold 16px sans-serif"
+		            },
+		            new go.Binding("text", "key")),
+		          // the collapse/expand button
+		          gogo("Button",
+		            {
+		              row: 0, alignment: go.Spot.TopRight,
+		              "ButtonBorder.stroke": null,
+		              click: function(e, but) {
+		                var list = but.part.findObject("LIST");
+		                if (list !== null) {
+		                  list.diagram.startTransaction("collapse/expand");
+		                  list.visible = !list.visible;
+		                  var shape = but.findObject("SHAPE");
+		                  if (shape !== null) shape.figure = (list.visible ? "TriangleUp" : "TriangleDown");
+		                  list.diagram.commitTransaction("collapse/expand");
+		                }
+		              } 
+		            },
+		            gogo(go.Shape, "TriangleUp",
+		              { name: "SHAPE", width: 6, height: 4 })),
+		          // the list of Panels, each showing an attribute
+		          gogo(go.Panel, "Vertical",
+		            {
+		              name: "LIST",
+		              row: 1,
+		              padding: 3,
+		              alignment: go.Spot.TopLeft,
+		              defaultAlignment: go.Spot.Left,
+		              stretch: go.GraphObject.Horizontal,
+		              itemTemplate: itemTempl
+		            },
+		            new go.Binding("itemArray", "items"))
+		        )  // end Table Panel
+		      );  // end Node
+
+		    // define the Link template, representing a relationship
+		    myDiagram.linkTemplate =
+		      gogo(go.Link,  // the whole link panel
+		        {
+		          selectionAdorned: true,
+		          layerName: "Foreground",
+		          reshapable: true,
+		          routing: go.Link.AvoidsNodes,
+		          corner: 5,
+		          curve: go.Link.JumpOver
+		        },
+		        gogo(go.Shape,  // the link shape
+		          { stroke: "#303B45", strokeWidth: 2.5 }),
+		        gogo(go.TextBlock,  // the "from" label
+		          {
+		            textAlign: "center",
+		            font: "bold 14px sans-serif",
+		            stroke: "#1967B3",
+		            segmentIndex: 0,
+		            segmentOffset: new go.Point(NaN, NaN),
+		            segmentOrientation: go.Link.OrientUpright
+		          },
+		          new go.Binding("text", "text")),
+		        gogo(go.TextBlock,  // the "to" label
+		          {
+		            textAlign: "center",
+		            font: "bold 14px sans-serif",
+		            stroke: "#1967B3",
+		            segmentIndex: -1,
+		            segmentOffset: new go.Point(NaN, NaN),
+		            segmentOrientation: go.Link.OrientUpright
+		          },
+		          new go.Binding("text", "toText"))
+		      );
+			var nodeDataArray = [];
+			var linkDataArray = [];
+			var appid = $("#appid").val();
+			var masterkey = $("#masterkey").val();
+			var arrayFields = [];
+			var schema = "";
+			//alert(JSON.stringify(potentialSchema))
+			if(potentialSchema != ""){
+				schema = potentialSchema;
+
+			} else {
+				schema = JSON.parse($("#schema").val());
+			}
+			_.each(schema.results, function(row){
+				var name = row.className;
+				var fields = row.fields;
+				//alert(JSON.stringify(row))
+				var keyNames = Object.keys(fields);
+				var fields = [];
+				for (var key in keyNames) {
+					 if(typeof row.fields[keyNames[key]].targetClass != "undefined"){
+					 	var targetclass = row.fields[keyNames[key]].targetClass;
+					 	var link = { from: name, to: targetclass };
+					 	linkDataArray.push(link);
+					 }
+					 if(row.fields[keyNames[key]].type == "Array"){
+						console.log("Array found: " + name + ": " + keyNames[key])
+						arrayFields.push({className: name, arrayField: keyNames[key] });
+					 }
+					 
+					 var item = { name: keyNames[key] + ": " + row.fields[keyNames[key]].type, iskey: false, figure: "Cube1", color: bluegrad }
+				     fields.push(item);
+				}
+				var newnode = { key: name, items: fields };
+				nodeDataArray.push(newnode);
+			});
+			var promises = [];
+			_.each(arrayFields, function(arrayToSearch){
+				var classObject = Parse.Object.extend(arrayToSearch.className);
+				var query = new Parse.Query(classObject);
+				query.select(arrayToSearch.arrayField);
+				//query.notEqualTo(arrayToSearch.arrayField, undefined);
+				//query.notEqualTo(arrayToSearch.arrayField, null);
+				query.notEqualTo(arrayToSearch.arrayField, []);
+				//query.notEqualTo(arrayToSearch.arrayField, "");
+				query.exists(arrayToSearch.arrayField); 
+				promises.push(query.first().then(
+					function(couldBeArray) { 
+						if(typeof couldBeArray != "undefined"){
+							var couldBeClassName = couldBeArray.className;
+							couldBeArray = JSON.parse(JSON.stringify(_.omit(couldBeArray, ['objectId', 'createdAt', 'updatedAt', 'id'])));
+							var keys = Object.keys(JSON.parse(JSON.stringify(couldBeArray)));//"objectId","createdAt","updatedAt"
+							console.log("Could be array: " + JSON.stringify(couldBeArray));
+							console.log("keys: " + JSON.stringify(keys));
+							//console.log("New keys: " + JSON.stringify(new_keys));
+							var lookin = keys[0]
+							console.log("Suggested key to look in: " + lookin);
+							console.log("New Could be: " + JSON.stringify(couldBeArray));
+							var thatval = couldBeArray[lookin];
+							console.log("That Val: " + JSON.stringify(thatval));
+							if(typeof thatval != "undefined"){
+								if(typeof thatval[0] != "undefined"){
+									if(typeof thatval[0].className != "undefined"){
+										console.log("found embedded pointer.");
+										var targetclass = thatval[0].className;
+										var link = { from: couldBeClassName, to: targetclass };
+										console.log("Adding link: " + JSON.stringify(link));
+										linkDataArray.push(link);
+									}
+								}
+							}
+						}
+					})
+				);
+				
+			});
+			Parse.Promise.when(promises).then(function(){
+				console.log("Loading schema");
+				var newnode = nodeDataArray;
+				myDiagram.model = new go.GraphLinksModel(newnode, linkDataArray);
+			});
+
+		  }
+	function GetParseSchema(callback){
+	  return Parse._request({
+	        route: "schemas",
+	        method: "GET",
+	        useMasterKey: true
+	      }).then(function(resp, status, xhr) {
+	      	console.log(resp)
+	      	if(status != 200){
+	      		alert(JSON.stringify(resp));
+	      	}
+	      	return resp;
+
+	      }).then(callback)
+	}
+	function InitializeParse(appid, masterkey, cb){
+		Parse.initialize(appid, "", masterkey);
+		var schema = GetParseSchema(cb);
+	}
+
+	function CreateERD(){
+		$(".diagram").remove();
+		var appid = $("#appid").val();
+		var masterkey = $("#masterkey").val();	
+		try {
+			if(appid != "" && masterkey != ""){
+				console.log("Trying with keys");
+				InitializeParse(appid, masterkey, ParseSchema)
+			} else {
+				var data = $("#schema").val();
+				if(data != ""){
+					//alert(data);
+					ParseSchema("");
+				}
+			}
+		} catch(e){
+			alert("Something went wrong.");
+		}
+
+	}
+	function createImage() {
+	  var exportimage = myDiagram.makeImageData({details: 1, scale: 1, maxSize: new go.Size(8000, 8000)});
+	  //newDocument.body.appendChild(svg);
+	  //$("#sample").append(exportimage);
+	  var url = exportimage.replace(/^data:image\/[^;]/, 'data:application/octet-stream');
+	  $("#hiddendownload").attr("download", "ParseERD.png");
+	  $("#hiddendownload").attr("href", url);
+	  $("#hiddendownload").attr("target", "_blank");
+	  var hd = document.getElementById('hiddendownload');
+	  hd.click();
+	}
+	function masterKeyWarning() {
+		alert('Using the Master Key allows the builder to search through columns that are arrays and look for embedded pointers.  This make the one to many relationships visible in your diagram.');
+	}
+	</script>
+	<style>
+.mycontent-left {
+  border-right: 1px dashed #333;
+}
+	</style>
+</head>
+<body onload="">
+	<div class="container">
+		<div class="jumbotron"  style="margin-top: 25px;">
+		  <h1>ERD Builder</h1>
+		  <h2>for <a href="http://www.parse.com">Parse.com</a> Databases</h2>
+		</div>
+
+		<div class="jumbotron">
+		  <img src="thumbsup.png" alt="" align="right" />
+		  <p>The following form will allow you to create a <strong>visual representation</strong> of your Parse.com <strong>Database Schema</strong>.  The Entity Relationship Diagram Builder <strong>takes your current database information</strong>, and creates an <strong>easy to read map</strong> that will make your work that much easier.</p>
+		  <p>Anyone working with a database like the ones found on Parse.com can appreciate that a diagram is sometimes easier to reference, and work with than what's currently possible from the administrative interface.</p>
+		  <p>Please <strong>feel free to use the form</strong> below to enter your information, and create <strong>your very own ERD</strong> which you can download and keep for yourself.</p> 
+		 
+		</div>
+
+		<div class="jumbotron">
+			<h2>Build an Entity Relationship Diagram</h2>
+		</div>
+
+		<div class="jumbotron">
+
+		<form class="form" role="form">
+		
+			<h2>1. Using the AppID and Master Key</h2>
+
+			<p>Enter the Application ID and the Master Key from your Parse.com Database to create a diagram</p>
+
+    			<p>App ID</p>
+
+				<p><input type="text" class="form-control" id="appid" placeholder="Application Id" style="width: 50%;"></p>
+		          
+				<p>Master Key <a href="javascript:masterKeyWarning();"><sup>(?)</sup></a></p>
+				
+				<p><input type="text" class="form-control" id="masterkey" placeholder="Master Key" style="width: 50%;"></p>
+
+				<p style="margin-top: 25px;"><a class="btn btn-primary btn-lg" href="http://erd.parseapp.com/#myDiagram" role="button" onclick="CreateERD()">Create ERD</a> <a class="btn btn-primary btn-lg" role="button" onclick="createImage()">Download ERD</a></p>
+		
+			
+			<h2 style="border-top: solid 2px #fff;border-bottom: solid 2px #fff;text-align: center;padding: 10px 0;">OR</h2>
+			<div id="sample" class="col-md-12">
+  			<h2>2. Copy and Paste the schema</h2>
+				<p>Take a copy of the schema from the API Console and input it into the following box.</p> 
+  
+    			<textarea id="schema" style="width: 50%; height: 100px; display: block;" placeholder="Schema"></textarea>
+    
+		</form>
+		
+		<p style="margin-top: 25px;"><a class="btn btn-primary btn-lg" href="http://erd.parseapp.com/#myDiagram" role="button" onclick="CreateERD()">Create ERD</a> <a class="btn btn-primary btn-lg" role="button" onclick="createImage()">Download ERD</a></p>
+	</div>
+	<a name="myDiagram"></a>
+	<div id="sample" class="col-md-12"></div>
+	<div class="jumbotron">
+		<h1>Disclaimer</h1>
+
+		<h2>Privacy</h2>
+
+		<p>All Parse.com API requests are being handled via Javascript SDK; locally,  in the browser.</p>
+		<p>Certain methods were overridden in order to allow the Schema API calls, none of these should endanger the privacy of your information.</p>
+		<p>Please, feel free to browse the source code to ensure the App ID and Master key are not used outside of Parse.com or your browser.</p>
+		
+		<h2>Thanks</h2>
+		<p>The visual representation used here is courtesy of the <a href="http://www.gojs.net" target="_neww">GoJS Library</a>.</p>
+
+		<h2>Affilliations</h2>
+		<p>This application is in no way affliated with Parse.com, or any of it's Partners.</p>
+	
+	</div>
+
+</div>
+
+
+</body>
+</html>

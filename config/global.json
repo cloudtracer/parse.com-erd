@@ -1,0 +1,14 @@
+{
+    "applications": {
+        "ERD": {
+            "applicationId": "ZeRvlsn6pku1FycZOfkQrpJpkRln3y7xAOVRwBSU", 
+            "masterKey": "TkFtbqBnmgjY2sd1Xk6fC7EaOMaK6IF7PdRf6vnG"
+        }, 
+        "_default": {
+            "link": "ERD"
+        }
+    }, 
+    "global": {
+        "parseVersion": "1.3.1"
+    }
+}
